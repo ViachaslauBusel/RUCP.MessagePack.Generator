@@ -2,10 +2,10 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Protocol.Codegen;
+using Protocol.Generator.InformationCollector;
+using RUCP.MessagePack.Generator.Database;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
 using System.Text;
 
 namespace Protocol.Generator
@@ -14,96 +14,128 @@ namespace Protocol.Generator
     [Generator]
     public class Generator : ISourceGenerator
     {
+        private DatabaseTypes m_database = new DatabaseTypes();
+        private SyntaxReceiver m_syntaxReceiver;
+        private GeneratorExecutionContext m_context;
+
         public void Execute(GeneratorExecutionContext context)
         {
+            m_context = context;
+            m_syntaxReceiver = context.SyntaxContextReceiver as SyntaxReceiver;
 
+            if (m_syntaxReceiver == null) { return; }
+            m_syntaxReceiver.OnFinishCollect();
 
+            m_context.AddSource($"DebugLog.txt", $@"
+interfaces:{m_syntaxReceiver.Interfaces.Count()},
+structs:{m_syntaxReceiver.Structs.Count()},
+Packets:{m_syntaxReceiver.Packets.Count()},
+Enums:{m_syntaxReceiver.Enums.Count()}
+");
 
-            SyntaxReceiver syntaxReceiver = context.SyntaxContextReceiver as SyntaxReceiver;
-
-            if (syntaxReceiver == null) { return; }
-
-            foreach(var obj in MessageObjects.Register(syntaxReceiver))
+            foreach (var @enum in m_syntaxReceiver.Enums) 
             {
-                context.AddSource($"{obj.name}_Extension.g.cs", obj.source);
-            }
-
-            foreach (FindNode findNode in syntaxReceiver.MessagePackets)
-            {
-                string source = @"
-//namespaces
-using RUCP;
-
-namespace $name_Space
-{
-    public static class $name_Extension
-    {
-        public static void Read(this Packet packet, out $name_Struct msg)
-        {
-            msg = new $name_Struct();
-               //Read data
-        }
-        public static void Write(this Packet packet, $name_Struct msg)
-        {
-              //Write data
-        }
-
-        public static void Send(this Client client, $name_Struct msg)
-        {
-            Packet packet = Packet.Create($name_Channel);
-            packet.OpCode = $name_Opcode;
-            packet.Write(msg);
-            client.Send(packet);
-        }
-    }
-}"; 
-                source = source.Replace("$name_Space", $"{Helper.GetNamespace(findNode.StructNode)}");
-                source = source.Replace("$name_Extension", $"{findNode.StructNode.Identifier.Text}_Extension");
-                source = source.Replace("$name_Struct", findNode.StructNode.Identifier.Text);
-
-                if (findNode.AttributeNode.ArgumentList.Arguments.Count == 2)
+                if (!m_database.ContainsType(@enum.BaseType))
                 {
-                    for (int i = 0; i < findNode.AttributeNode.ArgumentList.Arguments.Count; i++)
-                    {
-                        AttributeArgumentSyntax arg = findNode.AttributeNode.ArgumentList.Arguments[i];
-                        if(i==0)
-                        {
-                            if (arg.Expression is LiteralExpressionSyntax literalExpression)
-                            {
-                                source = source.Replace("$name_Opcode", $"{literalExpression.Token.Text}");
-                            }
-                            if (arg.Expression is MemberAccessExpressionSyntax memberAccessExpression
-                            && arg.Parent is AttributeArgumentListSyntax att
-                            && att.Arguments[0].Expression is MemberAccessExpressionSyntax parentMember)
-                            {
-
-                                source = source.Replace("$name_Opcode", $"{((IdentifierNameSyntax)memberAccessExpression.Expression).Identifier.ValueText}.{memberAccessExpression.Name.ToString()}");
-                            }
-                        }
-                        else if(i == 1)
-                        {
-                            if (arg.Expression is MemberAccessExpressionSyntax memberAccessExpression)
-                            {
-                                source = source.Replace("$name_Channel", $"Channel.{memberAccessExpression.Name.ToString()}");
-                            }
-                        }
-                      
-                    }
+                    //Error
+                    continue;
                 }
 
-
-                source = RW_Codegen.InsertRWLine(source, syntaxReceiver, findNode.StructNode);
-
-                
-
                
+                if (!m_database.ContainsType(@enum.TypeName))
+                {
+                    DeclarationType declarationInterface = @enum.CreateDeclaration(m_database.GetType(@enum.BaseType));
+                    m_database.AddType(declarationInterface);
+                }
+            }
 
 
-                context.AddSource($"{findNode.StructNode.Identifier.Text}_Extension.g.cs", source);
+            foreach(var @struct in m_syntaxReceiver.Structs) 
+            {
+                RegisterStruct(@struct);
+            }
+
+
+            foreach (PacketNode packetNode in m_syntaxReceiver.Packets)
+            {
+                string source = MessagePack_Extension.Source;
+                source = source.Replace("$name_Space", packetNode.Namespace);
+                source = source.Replace("$name_Extension", $"{packetNode.TypeName}_Extension");
+                source = source.Replace("$name_Struct", packetNode.TypeName);
+                source = source.Replace("$name_Opcode", packetNode.OpcodeName);
+                source = source.Replace("$name_Channel", packetNode.ChannelName);
+
+                foreach (var member in packetNode.Members)
+                {
+                    source = WriteMember(source, member.Identifier.ValueText, member.Type.ToString());
+                }
+
+                m_context.AddSource($"{packetNode.TypeName}_Extension.g.cs", source);
+            }
+
+            foreach(var @interface in m_syntaxReceiver.Interfaces) 
+            {
+                InterfaceType_Extension interfaceType = new InterfaceType_Extension(@interface.TypeName, @interface.Namespace);
+                foreach(var type in @interface.RegisteredTypes)
+                {
+                    if(!m_database.ContainsType(type.Value)) continue;
+                    var declarationType = m_database.GetType(type.Value);
+                    interfaceType.InsertType(type.Key, declarationType.TypeName, declarationType.ReadMethod, declarationType.WriteMethod, declarationType.Namespace);
+                }
+                m_context.AddSource($"{@interface.TypeName}_Extension.g.cs", interfaceType.Source);
             }
         }
 
-      
+        private void RegisterStruct(StructNode @struct)
+        {
+            string source = DeclarationType_Extension.Source;
+
+            source = source.Replace("$name_Space", $"{@struct.Namespace}");
+            source = source.Replace("$type", @struct.TypeName);
+
+            foreach (var member in @struct.Members)
+            {
+                source = WriteMember(source, member.Identifier.ValueText, member.Type.ToString());
+            }
+            if (!m_database.ContainsType(@struct.TypeName))
+            { m_database.AddType(new DeclarationType(@struct.TypeName, $"Read{@struct.TypeName}", $"Write{@struct.TypeName}", @namespace: @struct.Namespace)); }
+            m_context.AddSource($"{@struct.TypeName}_Extension.g.cs", source);
+        }
+
+        private string WriteMember(string source, string fieldName, string fieldType)
+        {
+            bool isArray = false;
+            //Если этот тип еще не зарегестрирован
+            if (!m_database.ContainsType(fieldType))
+            {
+                fieldType = fieldType.Replace("[]", "");
+                if (!m_database.ContainsType(fieldType))
+                {
+                    //Попытаться найти в незарегестированых типах
+                    var str = m_syntaxReceiver.Structs.FirstOrDefault(s => s.TypeName.Equals(fieldType));
+                    if (str != null) { RegisterStruct(str); }
+                }
+                else { isArray = true; }
+            }
+            //Если не удалось зарегестрировать, пропустить поля
+            if (!m_database.ContainsType(fieldType))
+            { return source; }//TODO вывести уведомления о томчто тип не зарегестирован
+
+           return RW_Codegen.InsertRWLine(source, fieldName, m_database.GetType(fieldType), isArray);
+        }
+
+        //public void Initialize(GeneratorInitializationContext context)
+        //{
+        //    throw new NotImplementedException();
+        //}
+
+        //source = RW_Codegen.InsertRWLine(source, syntaxReceiver, findNode.StructNode);
+
+        //    syntaxReceiver.readDeclarationTypes.Add(type, $"Read{type}");
+        //    syntaxReceiver.writeDeclarationTypes.Add(type, $"Write{type}");
+
+        //    syntaxReceiver.namespaces.Add(type, Helper.GetNamespace(findNode.StructNode));
+        //}
 
         public void Initialize(GeneratorInitializationContext context)
         {
@@ -113,7 +145,7 @@ using RUCP;
 
 namespace Protocol
 {
-     [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
     public class MessagePackAttribute : Attribute
     {
         private short m_opcode;
@@ -133,135 +165,45 @@ using RUCP;
 
 namespace Protocol
 {
-     [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
+     [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Interface, Inherited = false, AllowMultiple = false)]
     public class MessageObjectAttribute : Attribute
     {
     }
 }", Encoding.UTF8);
 
 
+            string guidExtension = @"
+using RUCP;
+using System;
+
+namespace Protocol
+{
+    public static class Guid_Extension
+    {
+        public static Guid ReadGuid(this Packet packet)
+        {
+                return new Guid(packet.ReadBytes());
+               //Read data
+        }
+        public static void WriteGuid(this Packet packet, Guid guid)
+        {
+            packet.WriteBytes(guid.ToByteArray());
+              //Write data
+        }
+    }
+}
+";
+
             // Register the attribute source
             context.RegisterForPostInitialization((i) =>
             {
                 i.AddSource("MessageObjectAttribute.g.cs", MessageObjectText);
                 i.AddSource("MessagePackAttribute.g.cs", MessagePackText);
+                i.AddSource($"Guid_Extension.g.cs", guidExtension);
             });
 
             // Register a syntax receiver that will be created for each generation pass
             context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
-        }
-    }
-
-    /// <summary>
-    /// Created on demand before each generation pass
-    /// </summary>
-   public class SyntaxReceiver : ISyntaxContextReceiver
-    {
-        public Dictionary<string, string> readDeclarationTypes = new Dictionary<string, string>()
-        {
-          { "byte[]", "ReadBytes" },
-          { "byte", "ReadByte" },
-            { "short", "ReadShort" },
-            { "ushort", "ReadUshort" },
-            { "int", "ReadInt" },
-             { "long", "ReadLong" },
-           { "float", "ReadFloat" },
-            { "bool", "ReadBool" },
-             { "string", "ReadString" },
-        };
-        public Dictionary<string, string> writeDeclarationTypes = new Dictionary<string, string>()
-        {
-          { "byte[]", "WriteBytes" },
-          { "byte", "WriteByte" },
-            { "short", "WriteShort" },
-            { "ushort", "WriteUshort" },
-            { "int", "WriteInt" },
-             { "long", "WriteLong" },
-           { "float", "WriteFloat" },
-            { "bool", "WriteBool" },
-             { "string", "WriteString" },
-        };
-        public Dictionary<string, string> castDeclarationTypes = new Dictionary<string, string>()
-        {
-          { "byte", "byte" }
-        };
-        public Dictionary<string, string> namespaces = new Dictionary<string, string>();
-
-        public List<FindNode> MessageObjects { get; } = new List<FindNode>();
-        public List<FindNode> MessagePackets { get; } = new List<FindNode>();
-
-        /// <summary>
-        /// Called for every syntax node in the compilation, we can inspect the nodes and save any information useful for generation
-        /// </summary>
-        public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
-        {
-            try
-            {
-
-                //Register enum type
-                if (context.Node is EnumDeclarationSyntax enumDeclaration)
-                {
-                    if (!readDeclarationTypes.ContainsKey(enumDeclaration.Identifier.ValueText))
-                    {
-                        if (enumDeclaration.BaseList != null && enumDeclaration.BaseList.Types.Count != 0)
-                        {
-                            if (enumDeclaration.BaseList.Types[0].Type is PredefinedTypeSyntax baseType)
-                            {
-                                if (readDeclarationTypes.ContainsKey(baseType.Keyword.ValueText))
-                                {
-                                    readDeclarationTypes.Add(enumDeclaration.Identifier.ValueText, readDeclarationTypes[baseType.Keyword.ValueText]);
-                                    writeDeclarationTypes.Add(enumDeclaration.Identifier.ValueText, writeDeclarationTypes[baseType.Keyword.ValueText]);
-                                    castDeclarationTypes.Add(enumDeclaration.Identifier.ValueText, baseType.Keyword.ValueText);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            readDeclarationTypes.Add(enumDeclaration.Identifier.ValueText, readDeclarationTypes["int"]);
-                            writeDeclarationTypes.Add(enumDeclaration.Identifier.ValueText, writeDeclarationTypes["int"]);
-                            castDeclarationTypes.Add(enumDeclaration.Identifier.ValueText, "int");
-                        }
-                    }
-                    if (!namespaces.ContainsKey(enumDeclaration.Identifier.ValueText))
-                    {
-                        namespaces.Add(enumDeclaration.Identifier.ValueText, Helper.GetNamespace(enumDeclaration));
-                    }
-                }
-
-
-
-                //Register struct type
-                if (context.Node is AttributeSyntax at)
-                {
-                    if (at.Name.ToString().Equals("MessageObject"))
-                    {
-                        SyntaxNode node = at?.Parent?.Parent;
-
-                        if (node != null && node is StructDeclarationSyntax structDeclaration)
-                        {
-                            MessageObjects.Add(new FindNode(structDeclaration, at));
-                        }
-                    }
-                }
-
-
-              
-
-                // any struct with at least one attribute is a candidate for property generation
-                if (context.Node is AttributeSyntax attribute)
-                {
-                    if (attribute.Name.ToString().Equals("MessagePack"))
-                    {
-                        SyntaxNode node = attribute?.Parent?.Parent;
-
-                        if (node != null && node is StructDeclarationSyntax structDeclaration)
-                        {
-                            MessagePackets.Add(new FindNode(structDeclaration, attribute));
-                        }
-                    }
-                }
-            }
-            catch { }
         }
     }
     

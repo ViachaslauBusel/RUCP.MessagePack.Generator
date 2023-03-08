@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -7,6 +7,9 @@
 	  <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
 	  <IsRoslynComponent>true</IsRoslynComponent>
 	  <LangVersion>latest</LangVersion>
+	  <FileVersion>1.1.0</FileVersion>
+	  <AssemblyVersion>1.1.0</AssemblyVersion>
+	  <Version>1.1.0</Version>
   </PropertyGroup>
 
 	<ItemGroup>
