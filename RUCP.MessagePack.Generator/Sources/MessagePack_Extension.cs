@@ -10,6 +10,7 @@ namespace Protocol.Codegen
 //namespaces
 using RUCP;
 using Protocol;
+using System.Collections.Generic;
 
 namespace $name_Space
 {

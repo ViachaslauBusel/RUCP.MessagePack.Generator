@@ -27,7 +27,7 @@ namespace Protocol.Generator.InformationCollector
             if (!m_cacheTypes.Add(typeName)) return;
 
             short typeId = (short)typeName.GetHashCode();
-            if (m_registeredIdToTypes.ContainsKey(typeId)) { typeId++; }
+            if (typeId == 0 || m_registeredIdToTypes.ContainsKey(typeId)) { typeId++; }
             m_registeredIdToTypes.Add(typeId, typeName);    
         }
     }

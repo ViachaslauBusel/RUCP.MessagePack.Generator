@@ -23,7 +23,7 @@ namespace Protocol.Generator.InformationCollector
 
         internal DeclarationType CreateDeclaration(DeclarationType baseDeclarationType)
         {
-            return new DeclarationType(m_type, baseDeclarationType.ReadMethod, baseDeclarationType.WriteMethod, castType: m_baseType, @namespace: m_namespace);
+            return new DeclarationType(m_type, baseDeclarationType.ReadMethod, baseDeclarationType.WriteMethod, baseType: m_baseType, @namespace: m_namespace);
         }
     }
 }

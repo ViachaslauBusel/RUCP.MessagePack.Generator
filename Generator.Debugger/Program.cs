@@ -15,6 +15,7 @@ namespace Generator.Debugger
             IData data = new TestIntarfaceObject();
             packet.WriteIData(data);
             TestMessagePacket message = new TestMessagePacket();
+            message.data = data;
             Client client = new Client();
             client.Send(message);
               Console.ReadLine();
@@ -23,6 +24,8 @@ namespace Generator.Debugger
 
 
     }
+
+
 
 
 }

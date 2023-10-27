@@ -14,23 +14,33 @@ namespace Protocol.Codegen
     {
         private static string IfNeedCastWrite(DeclarationType type)
         {
-            return (type.IsNeedCast ? $"({type.TypeName})" : "");
+            return (type.IsNeedCast ? $"({type.BaseTypeName})" : "");
         }
         private static string IfNeedCastRead(DeclarationType type)
         {
-            return (type.IsNeedCast ? $"({type.CastTypeName})" : "");
+            return (type.IsNeedCast ? $"({type.TypeName})" : "");
         }
-        internal static string GetReadLine(string fieldName, DeclarationType type, bool isArray)
+        internal static string GetReadLine(string fieldName, DeclarationType type, FieldType t)
         {
-            if(isArray)
+            if(t == FieldType.Array)
             {
-                    string readLine = FormatLine($"int count = packet.ReadShort();");
-                    readLine += FormatLine($"msg.{fieldName} = new {type.TypeName}[count];"); 
-                    readLine += FormatLine($"for(int i=0; i<count; i++)");
+                    string readLine = FormatLine($"int {fieldName}Count = packet.ReadShort();");
+                    readLine += FormatLine($"msg.{fieldName} = new {type.TypeName}[{fieldName}Count];"); 
+                    readLine += FormatLine($"for(int i=0; i<{fieldName}Count; i++)");
                     readLine += FormatLine("{");
                     readLine += FormatLine($"  msg.{fieldName}[i] = {IfNeedCastRead(type)}packet.{type.ReadMethod}();");
                     readLine += FormatLine("}");
                     return readLine;
+            }
+            else if (t == FieldType.List)
+            {
+                string readLine = FormatLine($"int {fieldName}Count = packet.ReadShort();");
+                readLine += FormatLine($"msg.{fieldName} = new List<{type.TypeName}>({fieldName}Count);");
+                readLine += FormatLine($"for(int i=0; i<{fieldName}Count; i++)");
+                readLine += FormatLine("{");
+                readLine += FormatLine($"  msg.{fieldName}.Add({IfNeedCastRead(type)}packet.{type.ReadMethod}());");
+                readLine += FormatLine("}");
+                return readLine;
             }
             else
             {
@@ -38,13 +48,23 @@ namespace Protocol.Codegen
             }
         }
 
-        internal static string GetWriteLine(string fieldName, DeclarationType type, bool isArray)
+        internal static string GetWriteLine(string fieldName, DeclarationType type, FieldType t)
         {
-            if (isArray)
+            if (t== FieldType.Array)
             {
-                string readLine = FormatLine($"int count = msg.{fieldName}?.Length ?? 0;");
-                readLine += FormatLine($"packet.WriteShort((short)count);");
-                readLine += FormatLine($"for(int i=0; i<count; i++)");
+                string readLine = FormatLine($"int {fieldName}Count = msg.{fieldName}?.Length ?? 0;");
+                readLine += FormatLine($"packet.WriteShort((short){fieldName}Count);");
+                readLine += FormatLine($"for(int i=0; i<{fieldName}Count; i++)");
+                readLine += FormatLine("{");
+                readLine += FormatLine($"  packet.{type.WriteMethod}({IfNeedCastWrite(type)}msg.{fieldName}[i]);");
+                readLine += FormatLine("}");
+                return readLine;
+            }
+            else if (t == FieldType.List)
+            {
+                string readLine = FormatLine($"int {fieldName}Count = msg.{fieldName}?.Count ?? 0;");
+                readLine += FormatLine($"packet.WriteShort((short){fieldName}Count);");
+                readLine += FormatLine($"for(int i=0; i<{fieldName}Count; i++)");
                 readLine += FormatLine("{");
                 readLine += FormatLine($"  packet.{type.WriteMethod}({IfNeedCastWrite(type)}msg.{fieldName}[i]);");
                 readLine += FormatLine("}");
@@ -56,25 +76,28 @@ namespace Protocol.Codegen
             }
         }
 
-        internal static string InsertRWLine(string source, string fieldName, DeclarationType declarationType, bool isArray)
+        internal static string InsertRWLine(string source, string fieldName, DeclarationType declarationType, FieldType type)
         {
             //Generate Read/Write lines
             string readMark = "//Read data";
             string writeMark = "//Write data";
 
 
-            string readLine = RW_Codegen.GetReadLine(fieldName, declarationType, isArray);
+            string readLine = RW_Codegen.GetReadLine(fieldName, declarationType, type);
             source = StringHelper.InserAfterMark(source, readLine, readMark);
 
 
-            string writeLine = RW_Codegen.GetWriteLine(fieldName, declarationType, isArray);
+            string writeLine = RW_Codegen.GetWriteLine(fieldName, declarationType, type);
             source = StringHelper.InserAfterMark(source, writeLine, writeMark);
 
 
             string nMark = "//namespaces";
             if (declarationType.IsHaveNamespace)
             {
-                source = StringHelper.InserAfterMark(source, declarationType.Namespace, nMark);
+                string namespaceLine = $"\nusing {declarationType.Namespace};";
+                if(!source.Contains(namespaceLine))
+                { source = StringHelper.InserAfterMark(source, namespaceLine, nMark); }
+             
             }
 
             return source;

@@ -15,8 +15,8 @@ namespace Protocol.Codegen
         private const string DataReadMark = "//dataReadMethodsMark";
 
         private string CreateTypeToIdLine(string typeName, int id) => $"\n{{ typeof({typeName}), {id} }},";
-        private string CreateWriteMethodLine(int id, string interfaceTypeName, string typeName, string wrtiteMethodName) => $"\n{{ {id}, (Packet packet, {interfaceTypeName} data) => {{  packet.{wrtiteMethodName}(({typeName})data); }} }}";
-        private string CreateReadMethodLine(int id, string readMethodName) => $"\n{{ {id}, (Packet packet) => {{ return packet.{readMethodName}(); }} }}";
+        private string CreateWriteMethodLine(int id, string interfaceTypeName, string typeName, string wrtiteMethodName) => $"\n{{ {id}, (Packet packet, {interfaceTypeName} data) => {{  packet.{wrtiteMethodName}(({typeName})data); }} }},";
+        private string CreateReadMethodLine(int id, string readMethodName) => $"\n{{ {id}, (Packet packet) => {{ return packet.{readMethodName}(); }} }},";
 
 
         private string m_interfaceTypeName;
@@ -33,7 +33,9 @@ namespace Protocol.Codegen
 
         internal void InsertType(int id, string typeName, string readMethod, string writeMethod, string @namespace)
         {
-            m_source = StringHelper.InserAfterMark(m_source, $"\nusing {@namespace};", UsingNamespaceMark);
+            string namespaceLine = $"\nusing {@namespace};";
+            if(!m_source.Contains(namespaceLine)) 
+            { m_source = StringHelper.InserAfterMark(m_source, namespaceLine, UsingNamespaceMark); }
             m_source = StringHelper.InserAfterMark(m_source, CreateTypeToIdLine(typeName, id), TypeToIdMapMark);
             m_source = StringHelper.InserAfterMark(m_source, CreateWriteMethodLine(id, m_interfaceTypeName, typeName, writeMethod), DataWriteMark);
             m_source = StringHelper.InserAfterMark(m_source, CreateReadMethodLine(id, readMethod), DataReadMark);
@@ -62,21 +64,28 @@ namespace  $name_Space
             //dataReadMethodsMark
         };
 
+        public static short GetID(this $InterfaceType data)
+        {
+           Type type = data?.GetType();
+           return (short)((type != null && m_typeToIdMap.ContainsKey(type)) ? m_typeToIdMap[type] : 0);
+        }
+
+
         public static $InterfaceType Read$InterfaceType(this Packet packet)
         {
             short typeID = packet.ReadShort();
 
             //Read Data
-            $InterfaceType msg = m_dataReadMethods[typeID].Invoke(packet);
+            $InterfaceType msg = (typeID != 0) ? m_dataReadMethods[typeID].Invoke(packet) : null;
 
             return msg;
         }
         public static void Write$InterfaceType(this Packet packet, $InterfaceType data)
         {
             //Write data
-            short typeID = m_typeToIdMap[data.GetType()];
+            short typeID = GetID(data);
             packet.WriteShort(typeID);
-            m_dataWriteMethods[typeID].Invoke(packet, data);
+            if (typeID != 0) { m_dataWriteMethods[typeID].Invoke(packet, data); }
         }
     }
 }

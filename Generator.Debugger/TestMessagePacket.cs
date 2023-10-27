@@ -11,5 +11,8 @@ namespace Generator.Debugger
     public struct TestMessagePacket
     {
         public TestMessageObject Object {get; set;}
+        public IData[] dataArray { get; set; }
+        public List<IData> dataList { get; set; }
+        public int length { get; set; }
     }
 }

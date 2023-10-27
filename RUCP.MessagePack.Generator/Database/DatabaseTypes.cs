@@ -13,7 +13,8 @@ namespace RUCP.MessagePack.Generator.Database
         {
             m_declarationTypes.Add("byte[]", new DeclarationType("byte[]", "ReadBytes", "WriteBytes"));
             m_declarationTypes.Add("Guid", new DeclarationType("Guid", "ReadGuid", "WriteGuid"));
-            m_declarationTypes.Add("byte", new DeclarationType("byte", "ReadByte", "WriteByte", castType: "byte"));
+            m_declarationTypes.Add("Vector3", new DeclarationType("Vector3", "ReadVector3", "WriteVector3", @namespace: "System.Numerics"));
+            m_declarationTypes.Add("byte", new DeclarationType("byte", "ReadByte", "WriteByte", baseType: "byte"));
             m_declarationTypes.Add("short", new DeclarationType("short", "ReadShort", "WriteShort"));
             m_declarationTypes.Add("ushort", new DeclarationType("ushort", "ReadUshort", "WriteUshort"));
             m_declarationTypes.Add("int", new DeclarationType("int", "ReadInt", "WriteInt"));
