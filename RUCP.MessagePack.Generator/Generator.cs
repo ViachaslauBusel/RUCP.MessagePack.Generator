@@ -123,6 +123,11 @@ namespace Protocol.Generator
                     fieldType = fieldType.Replace("List<", "").Replace(">", "");
                     type = FieldType.List;
                 }
+                if(RegularExpressionHelper.IsNullable(fieldType))
+                {
+                    fieldType = fieldType.Replace("?", "");
+                    type = FieldType.Nullable;
+                }
 
                 if (!m_database.ContainsType(fieldType))
                 {

@@ -25,5 +25,10 @@ namespace RUCP.MessagePack.Generator
         {
             return m_listPattern.Replace(fieldType, "");
         }
+
+        internal static bool IsNullable(string fieldType)
+        {
+            return fieldType.EndsWith("?");
+        }
     }
 }

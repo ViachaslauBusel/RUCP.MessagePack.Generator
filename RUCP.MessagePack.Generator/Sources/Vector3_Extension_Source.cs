@@ -24,8 +24,8 @@ namespace Protocol
             data.Y = packet.ReadFloat();
             data.Z = packet.ReadFloat();
             return data;
-         
         }
+
         public static void WriteVector3(this Packet packet, Vector3 vector)
         {
             //Write data

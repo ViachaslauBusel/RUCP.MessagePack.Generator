@@ -42,6 +42,11 @@ namespace Protocol.Codegen
                 readLine += FormatLine("}");
                 return readLine;
             }
+            else if(t == FieldType.Nullable)
+            {
+                string readLine = FormatLine($"msg.{fieldName} = packet.ReadBool() ? ({type.TypeName}?)packet.{type.ReadMethod}() : null;");
+                return readLine;
+            }
             else
             {
                 return FormatLine($"msg.{fieldName} = {IfNeedCastRead(type)}packet.{type.ReadMethod}();");
@@ -67,6 +72,15 @@ namespace Protocol.Codegen
                 readLine += FormatLine($"for(int i=0; i<{fieldName}Count; i++)");
                 readLine += FormatLine("{");
                 readLine += FormatLine($"  packet.{type.WriteMethod}({IfNeedCastWrite(type)}msg.{fieldName}[i]);");
+                readLine += FormatLine("}");
+                return readLine;
+            }
+            else if(t == FieldType.Nullable)
+            {
+                string readLine = FormatLine($"packet.WriteBool(msg.{fieldName} != null);");
+                readLine += FormatLine($"if(msg.{fieldName} != null)");
+                readLine += FormatLine("{");
+                readLine += FormatLine($"  packet.{type.WriteMethod}({IfNeedCastWrite(type)}msg.{fieldName}.Value);");
                 readLine += FormatLine("}");
                 return readLine;
             }
