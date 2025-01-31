@@ -15,13 +15,19 @@ namespace RUCP.MessagePack.Generator.Database
             m_declarationTypes.Add("Guid", new DeclarationType("Guid", "ReadGuid", "WriteGuid"));
             m_declarationTypes.Add("Vector3", new DeclarationType("Vector3", "ReadVector3", "WriteVector3", @namespace: "System.Numerics"));
             m_declarationTypes.Add("byte", new DeclarationType("byte", "ReadByte", "WriteByte", baseType: "byte"));
+            m_declarationTypes.Add("sbyte", new DeclarationType("sbyte", "ReadSbyte", "WriteSByte"));
             m_declarationTypes.Add("short", new DeclarationType("short", "ReadShort", "WriteShort"));
             m_declarationTypes.Add("ushort", new DeclarationType("ushort", "ReadUshort", "WriteUshort"));
             m_declarationTypes.Add("int", new DeclarationType("int", "ReadInt", "WriteInt"));
+            m_declarationTypes.Add("uint", new DeclarationType("uint", "ReadUint", "WriteUint"));
             m_declarationTypes.Add("long", new DeclarationType("long", "ReadLong", "WriteLong"));
+            m_declarationTypes.Add("ulong", new DeclarationType("ulong", "ReadUlong", "WriteUlong"));
             m_declarationTypes.Add("float", new DeclarationType("float", "ReadFloat", "WriteFloat"));
+            m_declarationTypes.Add("double", new DeclarationType("double", "ReadDouble", "WriteDouble"));
+            m_declarationTypes.Add("decimal", new DeclarationType("decimal", "ReadDecimal", "WriteDecimal"));
             m_declarationTypes.Add("bool", new DeclarationType("bool", "ReadBool", "WriteBool"));
             m_declarationTypes.Add("string", new DeclarationType("string", "ReadString", "WriteString"));
+            m_declarationTypes.Add("char", new DeclarationType("char", "ReadChar", "WriteChar"));
         }
 
         internal void AddType(DeclarationType declarationType)
