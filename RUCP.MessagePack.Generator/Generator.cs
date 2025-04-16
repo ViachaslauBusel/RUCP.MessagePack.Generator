@@ -201,6 +201,7 @@ namespace Protocol
                 i.AddSource("MessagePackAttribute.g.cs", MessagePackText);
                 i.AddSource(Guid_Extension_Source.FileName, Guid_Extension_Source.Source);
                 i.AddSource(Vector3_Extension_Source.FileName, Vector3_Extension_Source.Source);
+                i.AddSource(Vector2_Extension_Source.FileName, Vector2_Extension_Source.Source);
             });
 
             // Register a syntax receiver that will be created for each generation pass
