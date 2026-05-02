@@ -28,22 +28,13 @@ namespace Protocol.Generator
             if (m_syntaxReceiver == null) { return; }
             m_syntaxReceiver.OnFinishCollect();
 
-//            m_context.AddSource($"DebugLog.txt", $@"
-//interfaces:{m_syntaxReceiver.Interfaces.Count()},
-//structs:{m_syntaxReceiver.Structs.Count()},
-//Packets:{m_syntaxReceiver.Packets.Count()},
-//Enums:{m_syntaxReceiver.Enums.Count()}
-//");
-
-            foreach (var @enum in m_syntaxReceiver.Enums) 
+            foreach (var @enum in m_syntaxReceiver.Enums)
             {
                 if (!m_database.ContainsType(@enum.BaseType))
                 {
-                    //Error
                     continue;
                 }
 
-               
                 if (!m_database.ContainsType(@enum.TypeName))
                 {
                     DeclarationType declarationInterface = @enum.CreateDeclaration(m_database.GetType(@enum.BaseType));
@@ -51,8 +42,16 @@ namespace Protocol.Generator
                 }
             }
 
+            // ВАЖНО: сначала регистрируем типы интерфейсов в базе
+            foreach (var @interface in m_syntaxReceiver.Interfaces)
+            {
+                if (!m_database.ContainsType(@interface.TypeName))
+                {
+                    m_database.AddType(DeclarationType.Create(@interface.TypeName, @namespace: @interface.Namespace));
+                }
+            }
 
-            foreach(var @struct in m_syntaxReceiver.Structs) 
+            foreach (var @struct in m_syntaxReceiver.Structs)
             {
                 RegisterStruct(@struct);
             }
@@ -66,8 +65,7 @@ namespace Protocol.Generator
                     var declarationType = m_database.GetType(type.Value);
                     interfaceSource.InsertType(type.Key, declarationType.TypeName, declarationType.ReadMethod, declarationType.WriteMethod, declarationType.Namespace);
                 }
-                if (!m_database.ContainsType(@interface.TypeName)) 
-                { m_database.AddType(DeclarationType.Create(@interface.TypeName, @namespace:@interface.Namespace)); }
+
                 m_context.AddSource($"{@interface.TypeName}_Extension.g.cs", interfaceSource.Source);
             }
 
@@ -110,7 +108,7 @@ namespace Protocol.Generator
         private string WriteMember(string source, string fieldName, string fieldType)
         {
             FieldType type = FieldType.Default;
-            //Если этот тип еще не зарегестрирован
+            //Если этот тип еще не зарегистрирован
             if (!m_database.ContainsType(fieldType))
             {
                 if(RegularExpressionHelper.IsArray(fieldType)) 
@@ -120,7 +118,7 @@ namespace Protocol.Generator
                 }
                 if (RegularExpressionHelper.IsList(fieldType))
                 {
-                    fieldType = fieldType.Replace("List<", "").Replace(">", "");
+                    fieldType = fieldType.Substring(fieldType.IndexOf('<') + 1).TrimEnd('>');
                     type = FieldType.List;
                 }
                 if(RegularExpressionHelper.IsNullable(fieldType))
