@@ -21,6 +21,9 @@ namespace Protocol.Generator.InformationCollector
 
         public string Namespace => Helper.GetNamespace(m_struct);
 
-        public IEnumerable<PropertyDeclarationSyntax> Members => m_struct.Members.Where(m => m is PropertyDeclarationSyntax).Select(m => m as PropertyDeclarationSyntax);
+        public IEnumerable<PropertyDeclarationSyntax> Members =>
+            m_struct.Members
+                .OfType<PropertyDeclarationSyntax>()
+                .Where(p => !p.Modifiers.Any(m => m.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.StaticKeyword)));
     }
 }
