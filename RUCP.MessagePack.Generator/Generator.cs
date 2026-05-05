@@ -1,12 +1,11 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Protocol.Codegen;
 using Protocol.Generator.InformationCollector;
 using RUCP.MessagePack.Generator;
 using RUCP.MessagePack.Generator.Database;
 using RUCP.MessagePack.Generator.Sources;
-using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -89,20 +88,36 @@ namespace Protocol.Generator
            
         }
 
+        private readonly HashSet<string> m_registeringTypes = new HashSet<string>();
+
         private void RegisterStruct(StructNode @struct)
         {
-            string source = DeclarationType_Extension.Source;
+            if (m_database.ContainsType(@struct.TypeName))
+                return;
 
-            source = source.Replace("$name_Space", $"{@struct.Namespace}");
-            source = source.Replace("$type", @struct.TypeName);
+            // recursion guard
+            if (!m_registeringTypes.Add(@struct.TypeName))
+                return;
+
+            // register early
+            m_database.AddType(new DeclarationType(
+                @struct.TypeName,
+                $"Read{@struct.TypeName}",
+                $"Write{@struct.TypeName}",
+                null,
+                @namespace: @struct.Namespace));
+
+            string source = DeclarationType_Extension.Source
+                .Replace("$name_Space", @struct.Namespace)
+                .Replace("$type", @struct.TypeName);
 
             foreach (var member in @struct.Members)
             {
                 source = WriteMember(source, member.Identifier.ValueText, member.Type.ToString());
             }
-            if (!m_database.ContainsType(@struct.TypeName))
-            { m_database.AddType(new DeclarationType(@struct.TypeName, $"Read{@struct.TypeName}", $"Write{@struct.TypeName}", null, @namespace: @struct.Namespace)); }
+
             m_context.AddSource($"{@struct.TypeName}_Extension.g.cs", source);
+            m_registeringTypes.Remove(@struct.TypeName);
         }
 
         private string WriteMember(string source, string fieldName, string fieldType)
